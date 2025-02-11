@@ -12,6 +12,9 @@ pillow = "*"
 python-dotenv = "*"
 pytest = "*"
 httpx = "*"
+pydantic = "*"
+gunicorn = "*"
+requests = "*"
 
 [dev-packages]
 

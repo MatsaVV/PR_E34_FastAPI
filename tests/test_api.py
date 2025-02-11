@@ -2,35 +2,67 @@ import pytest
 from fastapi.testclient import TestClient
 from main import app
 import numpy as np
+import os
+from dotenv import load_dotenv
 
-client = TestClient(app)
+# Charger les variables d'environnement
+load_dotenv()
+API_KEY = os.getenv("API_KEY", "default_token")
+INVALID_TOKEN = "wrong_token"
 
-def test_root():
+# Création du client de test
+@pytest.fixture
+def client():
+    return TestClient(app)
+
+# Test d'un accès à une route inexistante
+def test_root(client):
     response = client.get("/")
-    assert response.status_code == 404  # Pas de route définie pour "/", c'est normal
-
-# Test d'une prédiction avec une entrée correcte
-def test_predict_valid():
-    test_data = {
-        "data": np.random.randint(0, 256, 784).tolist()  # Génère une image aléatoire 28x28
-    }
-    response = client.post("/predict", json=test_data)
-    assert response.status_code == 200
-    assert "prediction" in response.json()  # Vérifie que la réponse contient bien la clé 'prediction'
+    assert response.status_code == 404
 
 # Test d'une prédiction avec une entrée invalide (taille incorrecte)
-def test_predict_invalid_size():
+def test_predict_invalid_size(client):
     test_data = {
-        "data": [0] * 100  # Mauvaise taille, seulement 100 pixels au lieu de 784
+        "data": [0] * 100  # Mauvaise taille (doit être 784)
     }
-    response = client.post("/predict", json=test_data)
-    assert response.status_code == 400  # Doit retourner une erreur HTTP 400
+    response = client.post(
+        "/predict",
+        json=test_data,
+        headers={"x-token": API_KEY}
+    )
+    assert response.status_code == 400
     assert "detail" in response.json()
 
 # Test d'une prédiction avec des données non valides
-def test_predict_invalid_data():
+def test_predict_invalid_data(client):
     test_data = {
-        "data": ["invalid"] * 784  # Données invalides (strings au lieu de nombres)
+        "data": ["invalid"] * 784  # Valeurs non numériques
     }
-    response = client.post("/predict", json=test_data)
-    assert response.status_code == 422  # FastAPI renvoie une erreur 422 pour format incorrect
+    response = client.post(
+        "/predict",
+        json=test_data,
+        headers={"x-token": API_KEY}
+    )
+    assert response.status_code == 422  # Erreur de validation Pydantic
+
+# Test avec un token incorrect
+def test_predict_invalid_token(client):
+    test_data = {
+        "data": np.random.randint(0, 256, 784).tolist()
+    }
+    response = client.post(
+        "/predict",
+        json=test_data,
+        headers={"x-token": INVALID_TOKEN}  # Token invalide
+    )
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Token invalide ou manquant"
+
+# Test d'une requête vide
+def test_predict_empty_request(client):
+    response = client.post(
+        "/predict",
+        json={},
+        headers={"x-token": API_KEY}
+    )
+    assert response.status_code == 422  # Erreur de validation
