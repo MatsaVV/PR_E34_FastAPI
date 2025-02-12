@@ -39,9 +39,9 @@ Base = declarative_base()
 class Feedback(Base):
     __tablename__ = "feedback"
     id = Column(Integer, primary_key=True, index=True)
-    image_data = Column(Text, nullable=False)
     prediction = Column(Integer, nullable=False)
-    correct = Column(Integer, nullable=False)  # 1 = Correct, 0 = Incorrect
+    correct = Column(Integer, nullable=False)
+    chiffre_reel = Column(Integer, nullable=False)
     timestamp = Column(DateTime, default=datetime.datetime.utcnow)
 
 Base.metadata.create_all(bind=engine)
@@ -70,20 +70,29 @@ def predict(image: ImageRequest):
     return {"prediction": predicted_label}
 
 # Définition du format attendu pour stocker un feedback
-class FeedbackRequest(BaseModel):
-    image_data: str
+    class FeedbackRequest(BaseModel):
     prediction: int
     correct: int
+    chiffre_reel: int
 
 @app.post("/feedback")
 def store_feedback(feedback: FeedbackRequest):
     """ Stocker un feedback utilisateur """
     db = SessionLocal()
-    new_feedback = Feedback(image_data=feedback.image_data, prediction=feedback.prediction, correct=feedback.correct)
-    db.add(new_feedback)
-    db.commit()
-    db.close()
-    return {"message": "Feedback enregistré avec succès !"}
+    try:
+        new_feedback = Feedback(
+            prediction=feedback.prediction,
+            correct=feedback.correct,
+            chiffre_reel=feedback.chiffre_reel
+        )
+        db.add(new_feedback)
+        db.commit()
+        return {"message": "Feedback enregistré avec succès !"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
 
 @app.get("/feedback", dependencies=[Depends(verify_token)])
 def get_feedback():
