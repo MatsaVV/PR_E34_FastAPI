@@ -99,6 +99,16 @@ def store_feedback(feedback: FeedbackRequest):
     db.close()
     return {"message": "Feedback enregistré avec succès !"}
 
+@app.get("/feedback", dependencies=[Depends(verify_token)])
+def get_feedback():
+    """ Récupère tous les feedbacks stockés dans la base de données """
+    db = SessionLocal()
+    feedbacks = db.query(Feedback).all()
+    db.close()
+
+    return [{"id": f.id, "image_data": f.image_data, "prediction": f.prediction, "correct": f.correct, "timestamp": f.timestamp} for f in feedbacks]
+
+
 # Route pour récupérer les stats des feedbacks
 from sqlalchemy.sql import func
 
