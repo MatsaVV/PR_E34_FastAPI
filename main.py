@@ -9,6 +9,7 @@ from sqlalchemy import create_engine, Column, Integer, String, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import datetime
+from sqlalchemy.sql import func
 
 # Charger les variables d'environnement
 load_dotenv()
@@ -17,12 +18,7 @@ API_KEY = os.getenv("API_KEY", "default_token")
 # Désactiver le GPU pour éviter les erreurs CUDA
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
-# Initialiser FastAPI avec un titre et une description
-app = FastAPI(
-    title="Reconnaissance de chiffres manuscrits",
-    description="API permettant de reconnaître des chiffres manuscrits à partir d'un modèle de Deep Learning.",
-    version="1.0.0"
-)
+app = FastAPI(title="Reconnaissance de chiffres manuscrits", version="1.0.0")
 
 # Charger le modèle
 try:
@@ -30,10 +26,10 @@ try:
 except Exception as e:
     raise RuntimeError(f"Impossible de charger le modèle : {e}")
 
-# Connexion à la base de données MySQL sur Azure
+# Connexion à la base de données MySQL
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
-    raise RuntimeError("Erreur : La variable d'environnement DATABASE_URL n'est pas définie !")
+    raise RuntimeError("Erreur : La variable DATABASE_URL n'est pas définie !")
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -43,7 +39,7 @@ Base = declarative_base()
 class Feedback(Base):
     __tablename__ = "feedback"
     id = Column(Integer, primary_key=True, index=True)
-    image_data = Column(String(2048), nullable=False)  # Ajoute une longueur explicite pour VARCHAR
+    image_data = Column(String(2048), nullable=False)
     prediction = Column(Integer, nullable=False)
     correct = Column(Integer, nullable=False)  # 1 = Correct, 0 = Incorrect
     timestamp = Column(DateTime, default=datetime.datetime.utcnow)
@@ -62,27 +58,18 @@ def verify_token(api_key: str = Security(api_key_header)):
         raise HTTPException(status_code=401, detail="Token invalide ou manquant")
     return api_key
 
-@app.post("/predict", dependencies=[Depends(verify_token)], summary="Prédire un chiffre manuscrit")
+@app.post("/predict", dependencies=[Depends(verify_token)])
 def predict(image: ImageRequest):
-    """
-    Analyse une image de chiffre manuscrit et renvoie la prédiction du modèle.
-
-    - **data** : Une liste de 784 valeurs correspondant à une image 28x28 en niveaux de gris.
-    - **Retourne** : Le chiffre prédit par le modèle.
-    """
+    """ Prédire un chiffre manuscrit """
     if len(image.data) != 784:
-        raise HTTPException(status_code=400, detail=f"Nombre de valeurs incorrect : {len(image.data)}. Attendu : 784.")
+        raise HTTPException(status_code=400, detail="Nombre de valeurs incorrect")
 
-    try:
-        img = np.array(image.data, dtype=np.float32).reshape(1, 28, 28, 1) / 255.0
-        predicted_label = int(np.argmax(model.predict(img)))
+    img = np.array(image.data, dtype=np.float32).reshape(1, 28, 28, 1) / 255.0
+    predicted_label = int(np.argmax(model.predict(img)))
 
-        return {"prediction": predicted_label}
+    return {"prediction": predicted_label}
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erreur lors de la prédiction : {str(e)}")
-
-# Route pour stocker le feedback
+# Définition du format attendu pour stocker un feedback
 class FeedbackRequest(BaseModel):
     image_data: str
     prediction: int
@@ -90,31 +77,26 @@ class FeedbackRequest(BaseModel):
 
 @app.post("/feedback")
 def store_feedback(feedback: FeedbackRequest):
-    """ Stocke les retours des utilisateurs sur les prédictions """
+    """ Stocker un feedback utilisateur """
     db = SessionLocal()
     new_feedback = Feedback(image_data=feedback.image_data, prediction=feedback.prediction, correct=feedback.correct)
     db.add(new_feedback)
     db.commit()
-    db.refresh(new_feedback)
     db.close()
     return {"message": "Feedback enregistré avec succès !"}
 
 @app.get("/feedback", dependencies=[Depends(verify_token)])
 def get_feedback():
-    """ Récupère tous les feedbacks stockés dans la base de données """
+    """ Récupérer tous les feedbacks stockés dans la base de données """
     db = SessionLocal()
     feedbacks = db.query(Feedback).all()
     db.close()
 
     return [{"id": f.id, "image_data": f.image_data, "prediction": f.prediction, "correct": f.correct, "timestamp": f.timestamp} for f in feedbacks]
 
-
-# Route pour récupérer les stats des feedbacks
-from sqlalchemy.sql import func
-
 @app.get("/feedback_stats")
 def get_feedback_stats():
-    """ Récupère les statistiques des feedbacks """
+    """ Récupérer les statistiques des feedbacks """
     db = SessionLocal()
     correct_counts = db.query(Feedback.prediction, func.count()).filter(Feedback.correct == 1).group_by(Feedback.prediction).all()
     incorrect_counts = db.query(Feedback.prediction, func.count()).filter(Feedback.correct == 0).group_by(Feedback.prediction).all()
