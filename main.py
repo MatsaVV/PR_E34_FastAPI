@@ -43,7 +43,7 @@ Base = declarative_base()
 class Feedback(Base):
     __tablename__ = "feedback"
     id = Column(Integer, primary_key=True, index=True)
-    image_data = Column(String, nullable=False)
+    image_data = Column(String(2048), nullable=False)  # Ajoute une longueur explicite pour VARCHAR
     prediction = Column(Integer, nullable=False)
     correct = Column(Integer, nullable=False)  # 1 = Correct, 0 = Incorrect
     timestamp = Column(DateTime, default=datetime.datetime.utcnow)
