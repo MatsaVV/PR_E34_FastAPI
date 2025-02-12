@@ -70,7 +70,7 @@ def predict(image: ImageRequest):
     return {"prediction": predicted_label}
 
 # Définition du format attendu pour stocker un feedback
-    class FeedbackRequest(BaseModel):
+class FeedbackRequest(BaseModel):
     prediction: int
     correct: int
     chiffre_reel: int
