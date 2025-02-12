@@ -5,7 +5,7 @@ from tensorflow.keras.models import load_model
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import os
-from sqlalchemy import create_engine, Column, Integer, String, DateTime
+from sqlalchemy import Text, create_engine, Column, Integer, String, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import datetime
@@ -39,7 +39,7 @@ Base = declarative_base()
 class Feedback(Base):
     __tablename__ = "feedback"
     id = Column(Integer, primary_key=True, index=True)
-    image_data = Column(String(2048), nullable=False)
+    image_data = Column(Text, nullable=False)
     prediction = Column(Integer, nullable=False)
     correct = Column(Integer, nullable=False)  # 1 = Correct, 0 = Incorrect
     timestamp = Column(DateTime, default=datetime.datetime.utcnow)
