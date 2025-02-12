@@ -15,6 +15,8 @@ httpx = "*"
 pydantic = "*"
 gunicorn = "*"
 requests = "*"
+sqlalchemy = "*"
+pymysql = "*"
 
 [dev-packages]
 
